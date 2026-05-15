@@ -14,6 +14,20 @@ AI Debugging Assistant is a full-stack Java debugging tool built with Spring Boo
 - Basic safety policy to block dangerous code execution patterns
 - Docker setup for local deployment
 
+## Screenshots
+
+### Runtime Error Detection
+![Runtime Error](docs/screenshots/runtime-error.png)
+
+### Null Pointer Exception Detection
+![Null Pointer](docs/screenshots/null-pointer-error.png)
+
+### Compilation Error Detection
+![Compilation Error](docs/screenshots/compilation-error.png)
+
+### Array Index Out Of Bounds Detection
+![Array Index Error](docs/screenshots/array-index-error.png)
+
 ## Architecture
 
 ```text
