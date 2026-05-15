@@ -11,8 +11,8 @@ import org.springframework.core.annotation.Order;
 public class NullPointerExceptionHandler implements DebugHandler {
 
     @Override
-    public boolean canHandle(String exceptionType) {
-        return "NullPointerException".equals(exceptionType);
+    public String exceptionType() {
+        return NullPointerException.class.getSimpleName();
     }
 
     @Override

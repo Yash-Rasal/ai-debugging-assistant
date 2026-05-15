@@ -6,23 +6,28 @@ import com.yash.backend.executor.ExecutionResult;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
-@Order(1)
+@Order(50)
 @Component
-public class ArithmeticExceptionHandler implements DebugHandler {
+public class GenericCompilationHandler implements DebugHandler {
 
     @Override
     public String exceptionType() {
-        return ArithmeticException.class.getSimpleName();
+        return null;
+    }
+
+    @Override
+    public boolean canHandle(ExecutionResult result) {
+        return result != null && result.isCompilationError();
     }
 
     @Override
     public DebugResponse handle(String code, ExecutionResult result) {
         return new DebugResponse(
-                "The code performs an invalid arithmetic operation.",
-                "Check arithmetic expressions, especially division by zero.",
-                95,
+                "The submitted code failed Java compilation.",
+                result.getMessage(),
+                85,
                 "HIGH",
-                ErrorCategory.RUNTIME_ERROR.name(),
+                ErrorCategory.COMPILATION_ERROR.name(),
                 result.getLineNumber()
         );
     }

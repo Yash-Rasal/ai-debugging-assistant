@@ -1,5 +1,7 @@
 package com.yash.backend.executor;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.io.BufferedReader;
@@ -15,20 +17,34 @@ import java.util.concurrent.TimeUnit;
 @Component
 public class CodeExecutor {
 
+    private static final Logger log = LoggerFactory.getLogger(CodeExecutor.class);
     private static final long PROCESS_TIMEOUT_SECONDS = 5;
     private final ErrorParser errorParser;
+    private final CodeSafetyPolicy codeSafetyPolicy;
 
     public CodeExecutor() {
-        this(new ErrorParser());
+        this(new ErrorParser(), new CodeSafetyPolicy());
     }
 
     public CodeExecutor(ErrorParser errorParser) {
+        this(errorParser, new CodeSafetyPolicy());
+    }
+
+    public CodeExecutor(ErrorParser errorParser, CodeSafetyPolicy codeSafetyPolicy) {
         this.errorParser = errorParser;
+        this.codeSafetyPolicy = codeSafetyPolicy;
     }
 
     public ExecutionResult execute(String code) {
         if (code == null || code.isBlank()) {
-            return new ExecutionResult("INVALID_INPUT", "No Java code was provided", -1);
+            log.debug("Rejected empty code execution request");
+            return ExecutionResult.invalidInput("No Java code was provided");
+        }
+
+        CodeSafetyPolicy.SafetyCheck safetyCheck = codeSafetyPolicy.inspect(code);
+        if (!safetyCheck.allowed()) {
+            log.warn("Blocked unsafe code execution at line {}: {}", safetyCheck.lineNumber(), safetyCheck.message());
+            return ExecutionResult.securityViolation(safetyCheck.message(), safetyCheck.lineNumber());
         }
 
         Path tempDirectory = null;
@@ -53,12 +69,14 @@ public class CodeExecutor {
 
             if (!compile.waitFor(PROCESS_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
                 compile.destroyForcibly();
-                return new ExecutionResult("TIMEOUT", "Compilation timed out", -1);
+                log.warn("Compilation timed out after {} seconds", PROCESS_TIMEOUT_SECONDS);
+                return ExecutionResult.timeout("Compilation timed out");
             }
 
             String compileErrors = readErrorOutput(compile);
 
             if (!compileErrors.isBlank() || compile.exitValue() != 0) {
+                log.info("Compilation failed with exit code {}", compile.exitValue());
                 return errorParser.compilation(compileErrors);
             }
 
@@ -68,18 +86,22 @@ public class CodeExecutor {
 
             if (!run.waitFor(PROCESS_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
                 run.destroyForcibly();
-                return new ExecutionResult("TIMEOUT", "Code execution timed out", -1);
+                log.warn("Execution timed out after {} seconds", PROCESS_TIMEOUT_SECONDS);
+                return ExecutionResult.timeout("Code execution timed out");
             }
 
             String runtimeErrors = readErrorOutput(run);
 
             if (!runtimeErrors.isBlank() || run.exitValue() != 0) {
+                log.info("Runtime failed with exit code {}", run.exitValue());
                 return errorParser.runtime(runtimeErrors);
             }
 
-            return new ExecutionResult("SUCCESS", "Code executed successfully", -1);
+            log.debug("Code executed successfully");
+            return ExecutionResult.success();
         } catch (Exception e) {
-            return new ExecutionResult("SYSTEM_ERROR", e.getMessage(), -1);
+            log.error("Code execution failed due to system error", e);
+            return ExecutionResult.systemError(e.getMessage());
         } finally {
             deleteTempDirectory(tempDirectory);
         }
@@ -110,7 +132,8 @@ public class CodeExecutor {
                     .sorted(Comparator.reverseOrder())
                     .map(Path::toFile)
                     .forEach(File::delete);
-        } catch (IOException ignored) {
+        } catch (IOException e) {
+            log.debug("Failed to delete temporary directory {}", tempDirectory, e);
         }
     }
 }

@@ -5,6 +5,9 @@ import com.yash.backend.executor.CodeExecutor;
 import com.yash.backend.executor.ErrorParser;
 import com.yash.backend.executor.ExecutionResult;
 import com.yash.backend.handler.DebugHandler;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -12,20 +15,32 @@ import java.util.List;
 @Service
 public class DebugService {
 
+    private static final Logger log = LoggerFactory.getLogger(DebugService.class);
     private final List<DebugHandler> handlers;
     private final AIService aiService;
     private final CodeExecutor codeExecutor;
     private final ErrorParser errorParser;
+    private final DebugResponseNormalizer responseNormalizer;
 
     public DebugService(List<DebugHandler> handlers,
                         AIService aiService,
                         CodeExecutor codeExecutor,
                         ErrorParser errorParser) {
+        this(handlers, aiService, codeExecutor, errorParser, new DebugResponseNormalizer());
+    }
+
+    @Autowired
+    public DebugService(List<DebugHandler> handlers,
+                        AIService aiService,
+                        CodeExecutor codeExecutor,
+                        ErrorParser errorParser,
+                        DebugResponseNormalizer responseNormalizer) {
 
         this.handlers = handlers;
         this.aiService = aiService;
         this.codeExecutor = codeExecutor;
         this.errorParser = errorParser;
+        this.responseNormalizer = responseNormalizer;
     }
 
     public DebugResponse analyze(DebugRequest request) {
@@ -54,6 +69,8 @@ public class DebugService {
         }
 
         ExecutionResult result = codeExecutor.execute(code);
+        log.debug("Execution completed with status {}, diagnostic {}, line {}",
+                result.getStatus(), result.getDiagnosticCode(), result.getLineNumber());
 
         if (result.isSuccess()) {
             return new DebugResponse(
@@ -71,8 +88,10 @@ public class DebugService {
 
     private DebugResponse analyzeResult(String code, ExecutionResult result) {
         for (DebugHandler handler : handlers) {
-            if (handler.canHandle(result.getExceptionType())) {
-                return normalize(handler.handle(code, result), result, 95);
+            if (handler.canHandle(result)) {
+                log.debug("Using deterministic handler {} for status {}",
+                        handler.getClass().getSimpleName(), result.getStatus());
+                return responseNormalizer.normalize(handler.handle(code, result), result, 95);
             }
         }
 
@@ -80,41 +99,10 @@ public class DebugService {
     }
 
     private DebugResponse runAiFallback(String code, ExecutionResult result) {
+        log.debug("Using AI fallback for status {}, diagnostic {}",
+                result.getStatus(), result.getDiagnosticCode());
         DebugResponse response = aiService.getAISuggestion(code, result.getMessage(), result.getStackTrace());
-        return normalize(response, result, 70);
-    }
-
-    private DebugResponse normalize(DebugResponse response, ExecutionResult result, int fallbackConfidence) {
-        if (response == null) {
-            response = new DebugResponse(
-                    "ANALYSIS_FAILED",
-                    "No analysis response was produced.",
-                    50,
-                    "LOW",
-                    categoryFor(result),
-                    result.getLineNumber()
-            );
-        }
-
-        response.setSeverity(severityFor(result));
-        response.setCategory(categoryFor(result));
-        response.setLineNumber(result.getLineNumber());
-
-        response.setConfidence(clampConfidence(confidenceFor(response, fallbackConfidence), result));
-        return response;
-    }
-
-    private int confidenceFor(DebugResponse response, int fallbackConfidence) {
-        if (response.getCause() != null && response.getCause().startsWith("AI_")) {
-            return 50;
-        }
-
-        return fallbackConfidence;
-    }
-
-    private int clampConfidence(int confidence, ExecutionResult result) {
-        int maxConfidence = result.getExceptionType() == null ? 80 : 95;
-        return Math.max(50, Math.min(confidence, maxConfidence));
+        return responseNormalizer.normalize(response, result, 70);
     }
 
     private DebugResponse invalidRequestResponse(String suggestion) {
@@ -134,26 +122,6 @@ public class DebugService {
         }
 
         return second;
-    }
-
-    private String categoryFor(ExecutionResult result) {
-        if (result.isCompilationError()) {
-            return ErrorCategory.COMPILATION_ERROR.name();
-        }
-
-        if (result.isRuntimeError()) {
-            return ErrorCategory.RUNTIME_ERROR.name();
-        }
-
-        return ErrorCategory.LOGIC_ERROR.name();
-    }
-
-    private String severityFor(ExecutionResult result) {
-        if (result.isCompilationError() || result.isRuntimeError()) {
-            return "HIGH";
-        }
-
-        return "MEDIUM";
     }
 
     private boolean hasText(String value) {
