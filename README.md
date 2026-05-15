@@ -81,21 +81,22 @@ Spring Boot Backend
 
 ```text
 .
-├── src/main/java/com/yash/backend
-│   ├── DebugController.java
-│   ├── DebugService.java
-│   ├── DebugResponseNormalizer.java
-│   ├── ai/
-│   ├── executor/
-│   └── handler/
-├── src/test/java/com/yash/backend
-├── frontend/
-│   ├── src/
-│   ├── package.json
-│   └── vite.config.js
-├── Dockerfile
-├── docker-compose.yml
-└── README.md
+|-- src/main/java/com/yash/backend
+|   |-- DebugController.java
+|   |-- DebugService.java
+|   |-- DebugResponseNormalizer.java
+|   |-- ai/
+|   |-- executor/
+|   `-- handler/
+|-- src/test/java/com/yash/backend
+|-- frontend/
+|   |-- src/
+|   |-- package.json
+|   `-- vite.config.js
+|-- docs/screenshots/
+|-- Dockerfile
+|-- docker-compose.yml
+`-- README.md
 ```
 
 ## Prerequisites
@@ -232,24 +233,6 @@ Example response:
 }
 ```
 
-## Screenshots
-
-Add screenshots after capturing the running app:
-
-```text
-docs/screenshots/editor-analysis.png
-docs/screenshots/stack-trace-panel.png
-docs/screenshots/mobile-layout.png
-```
-
-Suggested GitHub markdown:
-
-```md
-![Editor analysis](docs/screenshots/editor-analysis.png)
-![Stack trace panel](docs/screenshots/stack-trace-panel.png)
-![Mobile layout](docs/screenshots/mobile-layout.png)
-```
-
 ## Docker Setup
 
 ### Build and Run Both Services
@@ -321,7 +304,6 @@ Production hardening to consider:
 - Memory limits for executed Java snippets
 - Persisted debugging history
 - Downloadable debug reports
-- Frontend screenshots in `docs/screenshots`
 - CI/CD workflow for tests, builds, and Docker images
 - Optional OpenAPI/Swagger documentation
 
